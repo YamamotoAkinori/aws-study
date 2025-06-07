@@ -1,9 +1,28 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: VPC with Subnet, Internet Gateway, Route Table and EC2Instance
+Description: VPC with Subnet, Internet Gateway, Route Table, SecurityGroup, EC2Instance, RDS, MySQL, ALB example with target group and listener
+
+Parameters:
+
+  # RDSのパラメーター
+  DBUsername:
+    Description: RDSのマスターユーザー名
+    Type: String
+    Default: root
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
+  
+  DBPassword:
+    Description: RDSのマスターパスワード
+    Type: String
+    NoEcho: true
+    Default: L2202670970
+    MinLength: 8
+    MaxLength: 41
 
 Resources:
 
-  # VPCのテンプレート
+  # VPC
   MyVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -14,7 +33,7 @@ Resources:
         - Key: Name
           Value: aws-study-vpc
 
-  # PublicSubnetのテンプレート
+  # サブネット：PublicSubnet
   # ap-northeast-1a
   MySubnetPublic1a:
     Type: AWS::EC2::Subnet
@@ -86,7 +105,7 @@ Resources:
       SubnetId: !Ref MySubnetPublic1c
       RouteTableId: !Ref MyRouteTablePublic
 
-  # PrivateSubnetのテンプレート
+  # サブネット：PrivateSubnet
   # ap-northeast-1a
   MySubnetPrivate1a:
     Type: AWS::EC2::Subnet
@@ -101,6 +120,7 @@ Resources:
         - Key: Name
           Value: aws-study-subnet-private1-ap-northeast-1a
 
+  # プライベートルートテーブル1a
   MyRouteTablePrivate1a:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -137,6 +157,7 @@ Resources:
         - Key: Name
           Value: aws-study-subnet-private2-ap-northeast-1c
 
+  # プライベートルートテーブル1c
   MyRouteTablePrivate1c:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -151,7 +172,8 @@ Resources:
       SubnetId: !Ref MySubnetPrivate1c
       RouteTableId: !Ref MyRouteTablePrivate1c
 
-  # EC2のテンプレート
+  # EC2
+  # セキュリティーグループ
   MySecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -175,6 +197,7 @@ Resources:
           ToPort: 80
           CidrIp: 0.0.0.0/0
 
+  # EC2インスタンス
   MyEC2Instance:
     Type: 'AWS::EC2::Instance'
     Properties:
@@ -193,5 +216,92 @@ Resources:
       Tags:
         - Key: Name
           Value: aws-study-ec2
+  
+  # RDS
+  MyDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: rds-ec2-db-subnet-group-3
+      SubnetIds:
+        - subnet-0cda5afac8ed25882
+        - subnet-0edc3b2e4fdccadf4
+        - subnet-03f40ea30192e51a0
 
-  # RDSのテンプレート
+  MyRDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: my-rds-instance
+      AllocatedStorage: 20
+      DBInstanceClass: db.t4g.micro
+      DBName: awsstudy
+      Engine: mysql
+      EngineVersion: 8.0.39
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBSubnetGroupName: !Ref MyDBSubnetGroup
+      VPCSecurityGroups:
+        - sg-00aa4e79a43aabe8e
+      MultiAZ: false
+      PubliclyAccessible: false
+      BackupRetentionPeriod: 7
+      StorageType: gp3
+
+  MyRouteTableRDS:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+        - Key: Name
+          Value: RDS-Pvt-rt
+
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP
+      VpcId: vpc-03663fc8609d64170
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  # ロードバランサー
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: aws-stack-alb
+      Scheme: internet-facing
+      Type: application
+      Subnets:
+        - subnet-09a2a6336ae92852d
+        - subnet-096de6fee5db10af7
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+
+  # ターゲットグループ
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: aws-stack-tg
+      Port: 80
+      Protocol: HTTP
+      VpcId: vpc-03663fc8609d64170
+      TargetType: instance
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ALB
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+# RDSの作成
+Outputs:
+  RDSInstanceEndpoint:
+    Description: RDSのエンドポイント
+    Value: !GetAtt MyRDSInstance.Endpoint.Address
