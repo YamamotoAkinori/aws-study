@@ -338,3 +338,4 @@ Outputs:
   RDSInstanceEndpoint:
     Description: RDSのエンドポイント
     Value: !GetAtt RDS.Endpoint.Address
+# test
