@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: VPC with Subnet, Internet Gateway, Route Table, SecurityGroup, EC2Instance, RDS, MySQL, ALB example with target group and listener
+Description: AWS-Study Template
 
 Parameters:
 
@@ -21,9 +21,8 @@ Parameters:
     MaxLength: 41
 
 Resources:
-
   # VPC
-  MyVPC:
+  VPC:
     Type: AWS::EC2::VPC
     Properties:
       CidrBlock: 10.0.0.0/16
@@ -34,83 +33,79 @@ Resources:
           Value: aws-study-vpc
 
   # サブネット：PublicSubnet
-  # ap-northeast-1a
-  MySubnetPublic1a:
+  # AZ1a
+  SubnetAZ1a:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref MyVPC
+      VpcId: !Ref VPC
       CidrBlock: 10.0.0.0/20
-      AvailabilityZone: 
-        Fn::Select:
-        - 0
-        - Fn::GetAZs: !Ref "AWS::Region"
+      AvailabilityZone: ap-northeast-1a
+      MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: aws-study-subnet-public1-ap-northeast-1a
+          Value: aws-study-subnet1a
 
-  # ap-northeast-1c
-  MySubnetPublic1c:
+  # AZ1c
+  SubnetAZ1c:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref MyVPC
+      VpcId: !Ref VPC
       CidrBlock: 10.0.16.0/20
-      AvailabilityZone: 
-        Fn::Select:
-        - 0
-        - Fn::GetAZs: !Ref "AWS::Region"
+      AvailabilityZone: ap-northeast-1c
       Tags:
         - Key: Name
-          Value: aws-study-subnet-public1-ap-northeast-1c
+          Value: aws-study-subnet1c
 
-  MyInternetGateway:
+  InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
           Value: aws-study-igw
 
-  AttachGatewayPublic:
+  VPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
-      VpcId: !Ref MyVPC
-      InternetGatewayId: !Ref MyInternetGateway
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
 
-  MyRouteTablePublic:
+  # ルートテーブル
+  RouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref MyVPC
+      VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: aws-study-rtb-public
+          Value: aws-study-rtb
 
-  DefaultRoute1:
+  RouteInternet:
     Type: AWS::EC2::Route
-    DependsOn: AttachGatewayPublic
+    DependsOn: VPCGatewayAttachment
     Properties:
-      RouteTableId: !Ref MyRouteTablePublic
+      RouteTableId: !Ref RouteTable
       DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref MyInternetGateway
+      GatewayId: !Ref InternetGateway
 
-  # ap-northeast-1a
-  SubnetRouteTableAssociationPublic1a:
+  # 各サブネットとルートテーブルとの関連付け
+  # AZ1a
+  RouteLocal1a:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref MySubnetPublic1a
-      RouteTableId: !Ref MyRouteTablePublic
+      SubnetId: !Ref SubnetAZ1a
+      RouteTableId: !Ref RouteTable
 
-  # ap-northeast-1c
-  SubnetRouteTableAssociationPublic1c:
+  # AZ1c
+  RouteLocal1c:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref MySubnetPublic1c
-      RouteTableId: !Ref MyRouteTablePublic
+      SubnetId: !Ref SubnetAZ1c
+      RouteTableId: !Ref RouteTable
 
-  # サブネット：PrivateSubnet
-  # ap-northeast-1a
-  MySubnetPrivate1a:
+  # AZ1a：プライベートサブネット
+  SubnetPrivate1a:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref MyVPC
+      VpcId: !Ref VPC
       CidrBlock: 10.0.128.0/20
       AvailabilityZone: 
         Fn::Select:
@@ -120,34 +115,34 @@ Resources:
         - Key: Name
           Value: aws-study-subnet-private1-ap-northeast-1a
 
-  # プライベートルートテーブル1a
-  MyRouteTablePrivate1a:
+  # AZ1a：プライベートルートテーブル
+  RouteTablePrivate1a:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref MyVPC
+      VpcId: !Ref VPC
       Tags:
         - Key: Name
           Value: aws-study-rtb-private1-ap-northeast-1a
 
   DefaultRoute2:
     Type: AWS::EC2::Route
-    DependsOn: AttachGatewayPublic
+    DependsOn: VPCGatewayAttachment
     Properties:
-      RouteTableId: !Ref MyRouteTablePrivate1a
+      RouteTableId: !Ref RouteTablePrivate1a
       DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref MyInternetGateway
+      GatewayId: !Ref InternetGateway
 
   SubnetRouteTableAssociationPrivate1a:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref MySubnetPrivate1a
-      RouteTableId: !Ref MyRouteTablePrivate1a
+      SubnetId: !Ref SubnetPrivate1a
+      RouteTableId: !Ref RouteTablePrivate1a
 
-  # ap-northeast-1c
-  MySubnetPrivate1c:
+  # AZ1c：プライベートサブネット
+  SubnetPrivate1c:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref MyVPC
+      VpcId: !Ref VPC
       CidrBlock: 10.0.144.0/20
       AvailabilityZone: 
         Fn::Select:
@@ -157,11 +152,11 @@ Resources:
         - Key: Name
           Value: aws-study-subnet-private2-ap-northeast-1c
 
-  # プライベートルートテーブル1c
-  MyRouteTablePrivate1c:
+  # AZ1c：プライベートルートテーブル
+  RouteTablePrivate1c:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref MyVPC
+      VpcId: !Ref VPC
       Tags:
         - Key: Name
           Value: aws-study-rtb-private2-ap-northeast-1c
@@ -169,16 +164,16 @@ Resources:
   SubnetRouteTableAssociationPrivate1c:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref MySubnetPrivate1c
-      RouteTableId: !Ref MyRouteTablePrivate1c
+      SubnetId: !Ref SubnetPrivate1c
+      RouteTableId: !Ref RouteTablePrivate1c
 
-  # EC2
   # セキュリティーグループ
-  MySecurityGroup:
+  # EC2
+  SecurityGroupEC2:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow SSH
-      VpcId: !Ref MyVPC
+      GroupDescription: AWS Study EC2
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 8080
@@ -196,112 +191,150 @@ Resources:
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: aws-study-securityGroup-ec2   
+
+  # RDS
+  SecurityGroupRDS:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: AWS Study RDS
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref SecurityGroupEC2
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: aws-study-securityGroup-rds  
 
   # EC2インスタンス
-  MyEC2Instance:
+  EC2:
     Type: 'AWS::EC2::Instance'
     Properties:
-      ImageId: ami-0c1638aa346a43fe8
+      # Amazon Linux 2023 の最新AMIをSSMパラメータストアから取得
+      ImageId: !Sub "resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
       InstanceType: t2.micro
       KeyName: AkinoriYamamoto
-      SubnetId: !Ref MySubnetPublic1a
-      SecurityGroupIds:
-        - !Ref MySecurityGroup
+      SubnetId: !Ref SubnetAZ1a
+      DisableApiTermination: false
+      InstanceInitiatedShutdownBehavior: stop
+      Monitoring: false
       BlockDeviceMappings:
         - DeviceName: /dev/sdm
           Ebs:
             VolumeType: gp3
             DeleteOnTermination: true
             VolumeSize: 20
+      SecurityGroupIds:
+        - !Ref SecurityGroupEC2
       Tags:
         - Key: Name
           Value: aws-study-ec2
-  
-  # RDS
-  MyDBSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: rds-ec2-db-subnet-group-3
-      SubnetIds:
-        - subnet-0cda5afac8ed25882
-        - subnet-0edc3b2e4fdccadf4
-        - subnet-03f40ea30192e51a0
 
-  MyRDSInstance:
+  # RDS
+  RDS:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceIdentifier: my-rds-instance
       AllocatedStorage: 20
+      AllowMajorVersionUpgrade: false
+      AutoMinorVersionUpgrade: true
       DBInstanceClass: db.t4g.micro
+      Port: 3306
+      StorageType: gp3
+      BackupRetentionPeriod: 7
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
       DBName: awsstudy
       Engine: mysql
       EngineVersion: 8.0.39
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
-      DBSubnetGroupName: !Ref MyDBSubnetGroup
-      VPCSecurityGroups:
-        - sg-00aa4e79a43aabe8e
+      LicenseModel: general-public-license
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups: 
+        - !Ref SecurityGroupRDS
       MultiAZ: false
       PubliclyAccessible: false
-      BackupRetentionPeriod: 7
-      StorageType: gp3
+      Tags:
+        - Key: Name
+          Value: aws-study-rds
 
-  MyRouteTableRDS:
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: DB subnet group created by CloudFormation
+      SubnetIds:
+        - !Ref SubnetAZ1a
+        - !Ref SubnetAZ1c
+
+  RouteTableRDS:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref MyVPC
+      VpcId: !Ref VPC
       Tags:
         - Key: Name
           Value: RDS-Pvt-rt
 
-  ALBSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Allow HTTP
-      VpcId: vpc-03663fc8609d64170
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-
   # ロードバランサー
-  ALB:
+  ELB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: aws-stack-alb
+      Name: aws-stack-elb
+      SecurityGroups:
+        - !Ref SecurityGroupEC2
+      Subnets:
+        - !Ref SubnetAZ1a
+        - !Ref SubnetAZ1c
       Scheme: internet-facing
       Type: application
-      Subnets:
-        - subnet-09a2a6336ae92852d
-        - subnet-096de6fee5db10af7
-      SecurityGroups:
-        - !Ref ALBSecurityGroup
-
+      Tags:
+        - Key: Name
+          Value: aws-study-elb
+      
   # ターゲットグループ
-  TargetGroup:
+  ELBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: aws-stack-tg
+      Name: aws-study-target-group
       Port: 80
       Protocol: HTTP
-      VpcId: vpc-03663fc8609d64170
-      TargetType: instance
-      HealthCheckPath: /
+      VpcId: !Ref VPC
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      HealthCheckTimeoutSeconds: 5
       HealthCheckProtocol: HTTP
+      HealthCheckPath: "/"
+      HealthCheckPort: "traffic-port"
+      HealthCheckIntervalSeconds: 10
+      Matcher:
+        HttpCode: 200
+      Tags:
+        - Key: Name
+          Value: aws-study-target-group
+      TargetType: instance
+      Targets:
+        - Id: !Ref EC2
+          Port: 8080
 
-  Listener:
+  ELBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
-      LoadBalancerArn: !Ref ALB
+      LoadBalancerArn: !Ref ELB
+      DefaultActions:
+        - TargetGroupArn: !Ref ELBTargetGroup
+          Type: forward
       Port: 80
       Protocol: HTTP
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref TargetGroup
-
+      
 # RDSの作成
 Outputs:
   RDSInstanceEndpoint:
     Description: RDSのエンドポイント
-    Value: !GetAtt MyRDSInstance.Endpoint.Address
+    Value: !GetAtt RDS.Endpoint.Address
