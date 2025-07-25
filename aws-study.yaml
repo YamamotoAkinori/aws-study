@@ -2,7 +2,6 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: AWS-Study Template
 
 Parameters:
-
   # RDSのパラメーター
   DBUsername:
     Description: RDSのマスターユーザー名
@@ -11,7 +10,7 @@ Parameters:
     MinLength: 1
     MaxLength: 16
     AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
-  
+
   DBPassword:
     Description: RDSのマスターパスワード
     Type: String
@@ -19,6 +18,17 @@ Parameters:
     Default: L2202670970
     MinLength: 8
     MaxLength: 41
+  
+  # IAMポリシー
+  ExistingUserName:
+    Type: String
+    Default: L2202670970
+
+# RDSの作成
+Outputs:
+  RDSInstanceEndpoint:
+    Description: RDSのエンドポイント
+    Value: !GetAtt RDS.Endpoint.Address
 
 Resources:
   # VPC
@@ -297,7 +307,7 @@ Resources:
       Tags:
         - Key: Name
           Value: aws-study-elb
-      
+
   # ターゲットグループ
   ELBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -332,9 +342,96 @@ Resources:
           Type: forward
       Port: 80
       Protocol: HTTP
-      
-# RDSの作成
-Outputs:
-  RDSInstanceEndpoint:
-    Description: RDSのエンドポイント
-    Value: !GetAtt RDS.Endpoint.Address
+
+  # EC2アラーム
+  EC2CPUUtilizationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties: 
+      AlarmName: aws-study-cpu-utilization-alarm
+      AlarmDescription: "Aws-Study.EC2のCPU使用率が 70%以上になりました。"
+
+      Namespace: "AWS/EC2"
+      Dimensions:
+        - Name: "InstanceId"
+          Value: !Ref EC2
+      MetricName: "CPUUtilization"
+      Unit: "Percent"
+
+      Period: 300
+      Statistic: "Average"
+
+      Threshold: 70
+      ComparisonOperator: "GreaterThanOrEqualToThreshold"
+      EvaluationPeriods: 3
+      DatapointsToAlarm: 2
+      TreatMissingData: "missing"
+
+      ActionsEnabled: true
+      AlarmActions:
+        - arn:aws:sns:ap-northeast-1:913925038760:AWS-Study-Topic
+
+  # WAF
+  WAFIPSet:
+    Type: AWS::WAFv2::IPSet
+    Properties:
+      Name: WAFv2-IPSet
+      Scope: REGIONAL  
+      IPAddressVersion: IPV4
+      Addresses:
+        - "219.59.24.182"
+
+  WAFWebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        SampledRequestsEnabled: false
+        CloudWatchMetricsEnabled: false
+        MetricName: AWS-Study-test
+      Description: "test"
+      Name: AWS-Study-WebACL
+      Scope: REGIONAL
+      Rules:
+        # AWSマネージドルールセット
+        - Name: AWS-AWSManagedRulesCommonRuleSet
+          Priority: 1
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+              ExcludedRules:
+                - Name: NoUserAgent_HEADER
+                - Name: UserAgent_BadBots_HEADER
+                - Name: SizeRestrictions_QUERYSTRING
+                - Name: SizeRestrictions_Cookie_HEADER
+                - Name: SizeRestrictions_BODY
+                - Name: SizeRestrictions_URIPATH
+                - Name: EC2MetaDataSSRF_BODY
+                - Name: EC2MetaDataSSRF_COOKIE
+                - Name: EC2MetaDataSSRF_URIPATH
+                - Name: EC2MetaDataSSRF_QUERYARGUMENTS
+                - Name: GenericLFI_QUERYARGUMENTS
+                - Name: GenericLFI_URIPATH
+                - Name: GenericLFI_BODY
+                - Name: RestrictedExtensions_URIPATH
+                - Name: RestrictedExtensions_QUERYARGUMENTS
+                - Name: GenericRFI_QUERYARGUMENTS
+                - Name: GenericRFI_BODY
+                - Name: GenericRFI_URIPATH
+                - Name: CrossSiteScripting_COOKIE
+                - Name: CrossSiteScripting_QUERYARGUMENTS
+                - Name: CrossSiteScripting_BODY
+                - Name: CrossSiteScripting_URIPATH
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSCommonRule
+
+  WAFALBAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn: !Ref ELB
+      WebACLArn: !GetAtt WAFWebACL.Arn
